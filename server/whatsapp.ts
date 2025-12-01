@@ -1,5 +1,4 @@
 import makeWASocket, {
-  useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
@@ -8,10 +7,9 @@ import makeWASocket, {
 } from "@whiskeysockets/baileys";
 import { Boom } from "@hapi/boom";
 import { storage } from "./storage";
+import { useDBAuthState } from "./dbAuthState";
 import type { Server as SocketIOServer } from "socket.io";
 import pino from "pino";
-import fs from "fs/promises";
-import path from "path";
 
 const logger = pino({ level: "silent" });
 
@@ -25,6 +23,7 @@ export class WhatsAppService {
   private isIntentionalDisconnect = false;
   private connectionAttempts = 0;
   private maxConnectionAttempts = 5;
+  private clearAuthStateFn: (() => Promise<void>) | null = null;
 
   async initialize(io: SocketIOServer) {
     if (this.isInitialized) {
@@ -66,7 +65,9 @@ export class WhatsAppService {
       process.env.PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true";
       process.env.PUPPETEER_SKIP_DOWNLOAD = "true";
       
-      const { state, saveCreds } = await useMultiFileAuthState("./.sessions/baileys");
+      // Use database-backed auth state for persistent sessions across container restarts
+      const { state, saveCreds, clearState } = await useDBAuthState();
+      this.clearAuthStateFn = clearState;
       const { version } = await fetchLatestBaileysVersion();
 
       this.sock = makeWASocket({
@@ -250,11 +251,11 @@ export class WhatsAppService {
 
   private async clearAuthState() {
     try {
-      const sessionPath = path.join(process.cwd(), ".sessions", "baileys");
-      const exists = await fs.access(sessionPath).then(() => true).catch(() => false);
-      
-      if (exists) {
-        await fs.rm(sessionPath, { recursive: true, force: true });
+      if (this.clearAuthStateFn) {
+        await this.clearAuthStateFn();
+        console.log("Auth state cleared from database successfully");
+      } else {
+        await storage.clearAllAuthData();
         console.log("Auth state cleared successfully");
       }
     } catch (error) {
@@ -283,8 +284,8 @@ export class WhatsAppService {
     console.log(`Reconnect scheduled in ${delay}ms`);
   }
 
-  async reconnect() {
-    console.log("Manual reconnect requested");
+  async reconnect(forceNewSession: boolean = false) {
+    console.log("Manual reconnect requested, forceNewSession:", forceNewSession);
     try {
       this.isIntentionalDisconnect = false;
       this.isReconnecting = false;
@@ -295,7 +296,11 @@ export class WhatsAppService {
         this.reconnectTimeout = null;
       }
       
-      await this.clearAuthState();
+      // Only clear auth state if explicitly requested (e.g., user wants to login with different account)
+      if (forceNewSession) {
+        await this.clearAuthState();
+      }
+      
       this.isInitialized = true;
       await this.connectToWhatsApp();
     } catch (error) {

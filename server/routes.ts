@@ -104,8 +104,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/reconnect", async (req, res) => {
     try {
-      await whatsappService.reconnect();
-      res.json({ success: true, message: "Reconnecting with fresh QR code..." });
+      const forceNewSession = req.body?.forceNewSession === true;
+      await whatsappService.reconnect(forceNewSession);
+      res.json({ 
+        success: true, 
+        message: forceNewSession 
+          ? "Reconnecting with fresh QR code..." 
+          : "Reconnecting with existing session..." 
+      });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

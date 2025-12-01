@@ -25,6 +25,13 @@ export interface IStorage {
   updateSession(session: Partial<InsertWhatsAppSession>): Promise<WhatsAppSession>;
   createSession(session: InsertWhatsAppSession): Promise<WhatsAppSession>;
   deleteSession(): Promise<void>;
+  
+  // Baileys Auth State (for persistent sessions)
+  getAuthData(key: string): Promise<string | null>;
+  setAuthData(key: string, data: string): Promise<void>;
+  deleteAuthData(key: string): Promise<void>;
+  clearAllAuthData(): Promise<void>;
+  getAllAuthKeys(): Promise<string[]>;
 }
 
 export class MySQLStorage implements IStorage {
@@ -75,6 +82,14 @@ export class MySQLStorage implements IStorage {
           isConnected BOOLEAN NOT NULL DEFAULT FALSE,
           qrCode LONGTEXT,
           lastConnected DATETIME
+        )
+      `);
+
+      await connection.execute(`
+        CREATE TABLE IF NOT EXISTS baileys_auth (
+          \`key\` VARCHAR(255) PRIMARY KEY,
+          data LONGTEXT NOT NULL,
+          updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )
       `);
 
@@ -276,7 +291,67 @@ export class MySQLStorage implements IStorage {
     const connection = await this.pool.getConnection();
     try {
       await connection.execute("DELETE FROM whatsapp_session");
-      console.log("WhatsApp session deleted from database");
+      await connection.execute("DELETE FROM baileys_auth");
+      console.log("WhatsApp session and auth data deleted from database");
+    } finally {
+      connection.release();
+    }
+  }
+
+  async getAuthData(key: string): Promise<string | null> {
+    const connection = await this.pool.getConnection();
+    try {
+      const [rows] = await connection.execute(
+        "SELECT data FROM baileys_auth WHERE `key` = ?",
+        [key]
+      );
+      if ((rows as any[]).length === 0) return null;
+      return (rows as any[])[0].data;
+    } finally {
+      connection.release();
+    }
+  }
+
+  async setAuthData(key: string, data: string): Promise<void> {
+    const connection = await this.pool.getConnection();
+    try {
+      await connection.execute(
+        `INSERT INTO baileys_auth (\`key\`, data) VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE data = VALUES(data)`,
+        [key, data]
+      );
+    } finally {
+      connection.release();
+    }
+  }
+
+  async deleteAuthData(key: string): Promise<void> {
+    const connection = await this.pool.getConnection();
+    try {
+      await connection.execute(
+        "DELETE FROM baileys_auth WHERE `key` = ?",
+        [key]
+      );
+    } finally {
+      connection.release();
+    }
+  }
+
+  async clearAllAuthData(): Promise<void> {
+    const connection = await this.pool.getConnection();
+    try {
+      await connection.execute("DELETE FROM baileys_auth");
+      console.log("All auth data cleared from database");
+    } finally {
+      connection.release();
+    }
+  }
+
+  async getAllAuthKeys(): Promise<string[]> {
+    const connection = await this.pool.getConnection();
+    try {
+      const [rows] = await connection.execute("SELECT `key` FROM baileys_auth");
+      return (rows as any[]).map((row: any) => row.key);
     } finally {
       connection.release();
     }
