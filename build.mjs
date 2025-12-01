@@ -1,21 +1,35 @@
 #!/usr/bin/env node
 import { execSync } from 'child_process';
 
+const esmShim = `
+import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+const require = createRequire(import.meta.url);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+`;
+
 try {
   console.log('Building frontend...');
   execSync('npx vite build', { stdio: 'inherit' });
   
   console.log('Building backend with bundled dependencies...');
+  const banner = esmShim.replace(/\n/g, '');
   execSync(`npx esbuild server/index.ts \
     --platform=node \
     --packages=bundle \
     --bundle \
-    --format=cjs \
-    --outfile=dist/index.cjs \
+    --format=esm \
+    --outfile=dist/index.js \
+    --banner:js="${banner}" \
     --external:@babel/preset-typescript \
     --external:lightningcss \
     --external:@tailwindcss/vite \
-    --external:vite`, { stdio: 'inherit' });
+    --external:vite \
+    --external:@replit/vite-plugin-cartographer \
+    --external:@replit/vite-plugin-dev-banner \
+    --external:@replit/vite-plugin-runtime-error-modal`, { stdio: 'inherit' });
   
   console.log('Build complete!');
 } catch (error) {
