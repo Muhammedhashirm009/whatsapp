@@ -1,11 +1,12 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { Server as SocketIOServer } from "socket.io";
-import { storage } from "./storage";
+import { storage, initializeStorage } from "./storage";
 import { whatsappService } from "./whatsapp";
 import { sendMessageSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  await initializeStorage();
   const httpServer = createServer(app);
 
   const io = new SocketIOServer(httpServer, {
@@ -96,6 +97,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       await whatsappService.disconnect();
       res.json({ success: true, message: "Disconnected successfully" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/reconnect", async (req, res) => {
+    try {
+      await whatsappService.reconnect();
+      res.json({ success: true, message: "Reconnecting with fresh QR code..." });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

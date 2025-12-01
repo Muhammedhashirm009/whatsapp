@@ -14,8 +14,8 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Build the application
-RUN npm run build
+# Build the application (using build.mjs which bundles all dependencies)
+RUN node build.mjs
 
 # Production stage
 FROM node:20-alpine AS production

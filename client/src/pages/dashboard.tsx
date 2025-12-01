@@ -8,22 +8,27 @@ import { ContactList } from "@/components/contact-list";
 import { MessageView } from "@/components/message-view";
 import { SendMessageForm } from "@/components/send-message-form";
 import { APIIntegration } from "@/components/api-integration";
+import { useAuth } from "@/lib/auth-context";
+import { Button } from "@/components/ui/button";
 import type { Contact, Message, WhatsAppSession } from "@shared/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MessageSquare, Users, Code } from "lucide-react";
+import { MessageSquare, Users, Code, LogOut, Lock } from "lucide-react";
 
 export default function Dashboard() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [activeTab, setActiveTab] = useState("chats");
+  const [isConnecting, setIsConnecting] = useState(false);
+  const { logout } = useAuth();
 
   const { data: session, refetch: refetchSession } = useQuery<WhatsAppSession>({
     queryKey: ["/api/session"],
+    refetchInterval: 3000,
   });
 
   const { data: contacts = [], refetch: refetchContacts } = useQuery<Contact[]>({
     queryKey: ["/api/contacts"],
-    enabled: session?.isConnected || false,
+    enabled: session?.isConnected || isConnecting,
   });
 
   const { data: messages = [], refetch: refetchMessages } = useQuery<Message[]>({
@@ -43,12 +48,14 @@ export default function Dashboard() {
     });
 
     newSocket.on("qr", () => {
+      setIsConnecting(true);
       refetchSession();
     });
 
-    newSocket.on("ready", () => {
-      refetchSession();
-      refetchContacts();
+    newSocket.on("ready", async () => {
+      setIsConnecting(false);
+      await refetchSession();
+      await refetchContacts();
     });
 
     newSocket.on("authenticated", () => {
@@ -56,6 +63,7 @@ export default function Dashboard() {
     });
 
     newSocket.on("disconnected", () => {
+      setIsConnecting(false);
       refetchSession();
       setSelectedContact(null);
     });
@@ -70,7 +78,7 @@ export default function Dashboard() {
     return () => {
       newSocket.close();
     };
-  }, []);
+  }, [refetchSession, refetchContacts, refetchMessages]);
 
   const style = {
     "--sidebar-width": "20rem",
@@ -81,14 +89,25 @@ export default function Dashboard() {
       <div className="flex h-screen w-full">
         <Sidebar>
           <SidebarHeader className="border-b p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center w-10 h-10 rounded-md bg-primary">
-                <MessageSquare className="w-5 h-5 text-primary-foreground" />
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 flex-1">
+                <div className="flex items-center justify-center w-10 h-10 rounded-md bg-primary">
+                  <MessageSquare className="w-5 h-5 text-primary-foreground" />
+                </div>
+                <div>
+                  <h1 className="text-lg font-semibold" data-testid="text-app-title">WhatsApp Bot</h1>
+                  <p className="text-xs text-muted-foreground">Automated Messaging</p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-lg font-semibold" data-testid="text-app-title">WhatsApp Bot</h1>
-                <p className="text-xs text-muted-foreground">Automated Messaging</p>
-              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={logout}
+                data-testid="button-logout"
+                title="Logout"
+              >
+                <LogOut className="w-4 h-4" />
+              </Button>
             </div>
           </SidebarHeader>
 
@@ -129,6 +148,19 @@ export default function Dashboard() {
                 </SidebarGroupContent>
               </SidebarGroup>
             )}
+
+            <SidebarGroup className="mt-auto border-t pt-4">
+              <SidebarGroupLabel className="px-4 flex items-center gap-2">
+                <Lock className="w-3 h-3" />
+                Authenticated Session
+              </SidebarGroupLabel>
+              <SidebarGroupContent className="px-2">
+                <div className="text-xs text-muted-foreground p-2 rounded bg-primary/5">
+                  <p className="font-medium text-foreground mb-1">Session Active</p>
+                  <p>Click the logout button in the header to end session</p>
+                </div>
+              </SidebarGroupContent>
+            </SidebarGroup>
           </SidebarContent>
         </Sidebar>
 
@@ -138,15 +170,15 @@ export default function Dashboard() {
           <main className="flex-1 overflow-hidden bg-background">
             {activeTab === "api" ? (
               <APIIntegration />
-            ) : !session?.isConnected ? (
+            ) : !session?.isConnected && !isConnecting ? (
               <QRCodeDisplay qrCode={session?.qrCode} />
-            ) : activeTab === "chats" && selectedContact ? (
+            ) : (session?.isConnected || isConnecting) && activeTab === "chats" && selectedContact ? (
               <MessageView
                 contact={selectedContact}
                 messages={messages}
                 onBack={() => setSelectedContact(null)}
               />
-            ) : activeTab === "chats" && !selectedContact ? (
+            ) : (session?.isConnected || isConnecting) && activeTab === "chats" && !selectedContact ? (
               <div className="flex items-center justify-center h-full">
                 <div className="text-center">
                   <MessageSquare className="w-16 h-16 mx-auto text-muted-foreground/30 mb-4" />
@@ -156,7 +188,7 @@ export default function Dashboard() {
                   </p>
                 </div>
               </div>
-            ) : activeTab === "contacts" ? (
+            ) : (session?.isConnected || isConnecting) && activeTab === "contacts" ? (
               <SendMessageForm />
             ) : null}
           </main>

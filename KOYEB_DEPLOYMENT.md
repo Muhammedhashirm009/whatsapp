@@ -24,7 +24,7 @@ NODE_ENV=production
 ### Using Git
 1. Push your code to GitHub
 2. Connect your GitHub repository to Koyeb
-3. Set Build Command: `npm run build`
+3. Set Build Command: `node build.mjs`
 4. Set Run Command: `npm start`
 
 ### Environment Variables in Koyeb
@@ -36,6 +36,8 @@ NODE_ENV=production
    - `DB_PASSWORD`: Database password
    - `NODE_ENV`: production
    - `PORT`: 5000
+   - `PUPPETEER_SKIP_CHROMIUM_DOWNLOAD`: true
+   - `PUPPETEER_SKIP_DOWNLOAD`: true
 
 ## Step 3: Database Setup
 The application will automatically create required tables on first run:
@@ -43,7 +45,21 @@ The application will automatically create required tables on first run:
 - `contacts` - Stores WhatsApp contacts
 - `messages` - Stores message history
 
-## Step 4: Access Your App
+## Step 4: Important Configuration
+
+### Browser Configuration
+The app uses **Baileys** (WebSocket-based WhatsApp), not browser automation. Chromium is not needed.
+
+**Configuration Files:**
+- `.puppeteerrc.cjs` - Disables Chromium download during build
+- Environment variables - Prevent Puppeteer attempts at runtime
+
+**If you see Puppeteer errors:**
+These are safe to ignore. The app continues working. If you want to eliminate them:
+1. Ensure `PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true` is set in Koyeb environment
+2. Rebuild your instance on Koyeb
+
+## Step 5: Access Your App
 Once deployed, your WhatsApp Bot will be available at your Koyeb app URL.
 
 ### Default Credentials
