@@ -10,8 +10,8 @@ try {
     --platform=node \
     --packages=bundle \
     --bundle \
-    --format=esm \
-    --outdir=dist \
+    --format=cjs \
+    --outfile=dist/index.cjs \
     --external:@babel/preset-typescript \
     --external:lightningcss \
     --external:@tailwindcss/vite \
