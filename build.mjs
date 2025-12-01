@@ -6,7 +6,16 @@ try {
   execSync('npx vite build', { stdio: 'inherit' });
   
   console.log('Building backend with bundled dependencies...');
-  execSync('npx esbuild server/index.ts --platform=node --packages=bundle --bundle --format=esm --outdir=dist', { stdio: 'inherit' });
+  execSync(`npx esbuild server/index.ts \
+    --platform=node \
+    --packages=bundle \
+    --bundle \
+    --format=esm \
+    --outdir=dist \
+    --external:@babel/preset-typescript \
+    --external:lightningcss \
+    --external:@tailwindcss/vite \
+    --external:vite`, { stdio: 'inherit' });
   
   console.log('Build complete!');
 } catch (error) {
